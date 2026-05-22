@@ -16,6 +16,10 @@ obj/
 # Packages
 packages/
 
-# Demo / test Excel files
+# Demo / test Excel files (root level)
 *.xlsx
 *.xlsm
+
+# Allow sample files in the samples/ folder
+!samples/*.xlsx
+!samples/*.xlsm
