@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="Ribbon_Load">
+  <ribbon>
+    <tabs>
+      <tab id="XLTrimTab" label="XL Trim">
+        <group id="CleanGroup" label="Cleanup">
+          <button id="btnClean"
+                  label="Clean file"
+                  imageMso="AccessAutoCorrectOptions"
+                  size="large"
+                  onAction="OnCleanClick"
+                  screentip="Analyze and clean styles and named ranges"
+                  supertip="Scans your Excel file and removes invalid styles and named ranges that slow it down." />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

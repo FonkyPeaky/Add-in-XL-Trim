@@ -1,0 +1,5 @@
+Windows Registry Editor Version 5.00
+
+[-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\XLTrim]
+[-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\XLIntegrity]
+[-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\CleanMySheet]
