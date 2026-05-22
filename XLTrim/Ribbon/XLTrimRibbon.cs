@@ -122,5 +122,14 @@ namespace XLTrim.Ribbon
             using (var reader = new StreamReader(stream))
                 return reader.ReadToEnd();
         }
+
+        public System.Drawing.Bitmap GetBroomImage(IRibbonControl control)
+        {
+            var asm    = Assembly.GetExecutingAssembly();
+            var stream = asm.GetManifestResourceStream("XLTrim.broom.png");
+            return stream != null
+                ? new System.Drawing.Bitmap(stream)
+                : null;
+        }
     }
 }

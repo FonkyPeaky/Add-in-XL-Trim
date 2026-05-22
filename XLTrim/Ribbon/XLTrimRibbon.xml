@@ -6,7 +6,7 @@
         <group id="CleanGroup" label="Cleanup">
           <button id="btnClean"
                   label="Clean file"
-                  imageMso="AccessAutoCorrectOptions"
+                  getImage="GetBroomImage"
                   size="large"
                   onAction="OnCleanClick"
                   screentip="Analyze and clean styles and named ranges"

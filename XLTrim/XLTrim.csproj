@@ -219,6 +219,9 @@
     <EmbeddedResource Include="Ribbon\XLTrimRibbon.xml">
       <LogicalName>XLTrim.Ribbon.XLTrimRibbon.xml</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="broom.png">
+      <LogicalName>XLTrim.broom.png</LogicalName>
+    </EmbeddedResource>
     <!-- UI glassmorphism -->
     <Compile Include="UI\GlassWindow.cs" />
     <Page Include="UI\BackupDialog.xaml">
