@@ -32,14 +32,9 @@ namespace XLTrim.Core
                     try
                     {
                         object styleObj = cell.Style;
-
-                        if      (styleObj is Excel.Style excelStyle) usedStyles.Add(excelStyle.Name);
-                        else if (styleObj is string styleName)        usedStyles.Add(styleName);
-                        else
-                        {
-                            dynamic dyn = styleObj;
-                            usedStyles.Add((string)dyn.Name);
-                        }
+                        if      (styleObj is Excel.Style es) { usedStyles.Add(es.Name); }
+                        else if (styleObj is string s)         usedStyles.Add(s);
+                        // any other type (null, DBNull) is ignored — no dynamic dispatch
                     }
                     catch { }
                 }
@@ -60,19 +55,20 @@ namespace XLTrim.Core
             }
 
             // ── Phase 3 : delete (70 % → 100 %) ───────────────────────────────
-            int total     = Math.Max(1, toDelete.Count);
-            int deleteIdx = 0;
+            int total       = Math.Max(1, toDelete.Count);
+            int deleteIdx   = 0;
+            int actualDeleted = 0;
 
             foreach (var style in toDelete)
             {
                 deleteIdx++;
                 onProgress?.Invoke(0.7 + (double)deleteIdx / total * 0.3);
-                try { style.Delete(); }
+                try { style.Delete(); actualDeleted++; }
                 catch { }
             }
 
             onProgress?.Invoke(1.0);
-            return toDelete.Count;
+            return actualDeleted;
         }
     }
 }

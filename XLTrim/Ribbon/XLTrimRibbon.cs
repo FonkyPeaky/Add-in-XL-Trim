@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using Microsoft.Office.Core;
 using Microsoft.Win32;
 using XLTrim.Core;
@@ -14,6 +15,8 @@ namespace XLTrim.Ribbon
     public class XLTrimRibbon : IRibbonExtensibility
     {
         private IRibbonUI _ribbon;
+        private System.Drawing.Bitmap _broomImage;
+        private Stream                _broomStream;
 
         public string GetCustomUI(string ribbonID)
         {
@@ -43,8 +46,23 @@ namespace XLTrim.Ribbon
                 return;
             }
 
+            // Guard against OneDrive / SharePoint paths — File.Copy cannot handle URLs.
+            if (workbook.FullName.StartsWith("http", StringComparison.OrdinalIgnoreCase) ||
+                !Path.IsPathRooted(workbook.FullName))
+            {
+                MessageBox.Show(
+                    "XL Trim requires a locally saved file.\n\n" +
+                    "Please save a local copy of this workbook before using XL Trim.\n" +
+                    "(OneDrive / SharePoint files must be synced and opened from a local path.)",
+                    "XL Trim", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var owner = ExcelOwner();
+
             // ── Step 1: offer backup ──────────────────────────────────────────
             var backupDialog = new BackupDialog(workbook.FullName);
+            new WindowInteropHelper(backupDialog) { Owner = owner };
             if (backupDialog.ShowDialog() != true) return;
 
             if (backupDialog.ShouldBackup)
@@ -55,6 +73,7 @@ namespace XLTrim.Ribbon
 
             // ── Step 2: scan + clean ──────────────────────────────────────────
             var scanDialog = new ScanDialog(workbook);
+            new WindowInteropHelper(scanDialog) { Owner = owner };
             scanDialog.ShowDialog();
         }
 
@@ -113,23 +132,38 @@ namespace XLTrim.Ribbon
         private static string workbook_dir(string path)
             => Path.GetDirectoryName(path) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+        private static IntPtr ExcelOwner()
+        {
+            try { return new IntPtr(Globals.ThisAddIn.Application.Hwnd); }
+            catch { return IntPtr.Zero; }
+        }
+
         // ── Ribbon resource ───────────────────────────────────────────────────
 
         private static string GetResourceText(string resourceName)
         {
-            var asm = Assembly.GetExecutingAssembly();
-            using (var stream = asm.GetManifestResourceStream(resourceName))
+            var asm    = Assembly.GetExecutingAssembly();
+            var stream = asm.GetManifestResourceStream(resourceName);
+            if (stream == null)
+                throw new InvalidOperationException(
+                    $"Embedded resource '{resourceName}' not found. " +
+                    "Check that the file's Build Action is set to EmbeddedResource.");
+            using (stream)
             using (var reader = new StreamReader(stream))
                 return reader.ReadToEnd();
         }
 
         public System.Drawing.Bitmap GetBroomImage(IRibbonControl control)
         {
-            var asm    = Assembly.GetExecutingAssembly();
-            var stream = asm.GetManifestResourceStream("XLTrim.broom.png");
-            return stream != null
-                ? new System.Drawing.Bitmap(stream)
-                : null;
+            if (_broomImage != null) return _broomImage;
+
+            // Keep _broomStream alive — Bitmap requires the source stream to remain open.
+            _broomStream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream("XLTrim.broom.png");
+
+            if (_broomStream == null) return null;
+            _broomImage = new System.Drawing.Bitmap(_broomStream);
+            return _broomImage;
         }
     }
 }

@@ -18,11 +18,12 @@ namespace XLTrim.Core
 
         /// <summary>
         /// Copies <paramref name="sourceFilePath"/> to <paramref name="destinationPath"/>.
-        /// Throws if the destination already exists or the copy fails.
+        /// Overwrites if the destination already exists (the SaveFileDialog already
+        /// prompted the user for confirmation via OverwritePrompt = true).
         /// </summary>
         public static void CreateBackupTo(string sourceFilePath, string destinationPath)
         {
-            File.Copy(sourceFilePath, destinationPath, overwrite: false);
+            File.Copy(sourceFilePath, destinationPath, overwrite: true);
         }
     }
 }

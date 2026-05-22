@@ -34,7 +34,11 @@ namespace XLTrim.UI
             txtSubtitle.Text = "Scanning...";
             ShowPanel(panelScanning);
 
-            _scanResult = await Task.Run(() => WorkbookScanner.Scan(_workbook));
+            // Small delay so the scanning panel paints before we block the UI thread.
+            await Task.Delay(400);
+
+            // Excel COM objects require STA — run on the UI thread, not Task.Run.
+            _scanResult = WorkbookScanner.Scan(_workbook);
 
             ShowPanel(panelResults);
             txtSubtitle.Text = "Scan complete — check the results below.";
@@ -156,70 +160,56 @@ namespace XLTrim.UI
         private async void CleanButton_Click(object sender, RoutedEventArgs e)
         {
             btnClean.IsEnabled = false;
+            btnClose.IsEnabled = false;   // prevent closing while COM operations run
             ShowPanel(panelCleaning);
             txtSubtitle.Text = "Cleaning in progress...";
 
-            // WPF StrokeDashArray values are in multiples of StrokeThickness (not raw pixels).
-            // Ellipse Ø90, StrokeThickness=6 → path radius=42 → C=2π×42≈263.9px
-            // Round caps add T/2=3px per end → full dash = 263.9−6 = 257.9px
-            // In StrokeDashArray units: 257.9 / 6 ≈ 43.0
+            // WPF StrokeDashArray units = multiples of StrokeThickness (6).
+            // Ellipse Ø90 → path radius 42 → C = 2π×42 ≈ 263.9 px
+            // Round caps (T/2=3 px per end) → effective full dash = 257.9 px → ÷6 ≈ 43.0
             const double RING_CIRC = 43.0;
 
-            // Always on the UI thread
+            // Runs on the UI (STA) thread and forces a render pass so the ring moves
+            // visibly during the synchronous COM work.
             void SetProgress(int pct, string status)
             {
                 txtProgressPct.Text = $"{pct}%";
                 txtCleanStatus.Text = status;
                 progressRing.StrokeDashArray = new DoubleCollection { pct / 100.0 * RING_CIRC, 1000 };
+                Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.Render, new Action(() => { }));
             }
 
             int deletedStyles = 0, deletedNames = 0, unhiddenNames = 0;
 
-            // targetPct/targetStatus written by background thread (int & ref writes are atomic on x86-64)
-            int    targetPct    = 5;
-            string targetStatus = "Preparing...";
+            // Brief pause so the cleaning panel paints before blocking the UI thread.
+            await Task.Delay(100);
 
-            // displayPct smoothly chases targetPct with exponential easing — runs at ~60 fps on the UI thread.
-            // This bridges the instantaneous milestones (55→80→95→100) with a visible animation,
-            // and eliminates any Progress<T> callback-ordering issue.
-            double displayPct = 5.0;
+            // Excel COM objects require STA — all calls stay on the UI thread.
+            SetProgress(5, "Preparing...");
 
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            timer.Tick += (s, ev) =>
+            deletedStyles = StylesCleaner.Clean(_workbook, ratio =>
+                SetProgress((int)(10 + ratio * 40), "Cleaning styles..."));
+
+            SetProgress(55, "Removing invalid ranges...");
+            deletedNames = NamedRangesCleaner.DeleteInvalid(_workbook);
+
+            SetProgress(80, "Restoring hidden ranges...");
+            unhiddenNames = NamedRangesCleaner.UnhideAll(_workbook);
+
+            SetProgress(95, "Saving file...");
+            try
             {
-                displayPct += (targetPct - displayPct) * 0.18;          // exponential approach
-                if (Math.Abs(displayPct - targetPct) < 0.5) displayPct = targetPct; // snap when close
-                SetProgress((int)displayPct, targetStatus);
-            };
-            timer.Start();
-
-            await Task.Run(() =>
+                if (!string.IsNullOrEmpty(_workbook.Path))
+                    _workbook.Save();
+            }
+            catch (Exception ex)
             {
-                // Styles: 10% → 50%, granular
-                deletedStyles = StylesCleaner.Clean(_workbook, ratio =>
-                {
-                    targetPct    = (int)(10 + ratio * 40);
-                    targetStatus = "Cleaning styles...";
-                });
+                MessageBox.Show($"Could not save workbook:\n{ex.Message}",
+                    "XL Trim", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
 
-                targetPct = 55; targetStatus = "Removing invalid ranges...";
-                deletedNames = NamedRangesCleaner.DeleteInvalid(_workbook);
-
-                targetPct = 80; targetStatus = "Restoring hidden ranges...";
-                unhiddenNames = NamedRangesCleaner.UnhideAll(_workbook);
-
-                targetPct = 95; targetStatus = "Saving file...";
-                _workbook.Save();
-
-                targetPct = 100; targetStatus = "Done!";
-            });
-
-            // Let the easing animation reach 100% smoothly (worst case ~420 ms from any start point)
-            await Task.Delay(500);
-            timer.Stop();
-            SetProgress(100, "Done!"); // guarantee exact final frame
-
-            await Task.Delay(250);   // brief hold at 100% before switching to done panel
+            SetProgress(100, "Done!");
+            await Task.Delay(400);
 
             txtDoneSummary.Text =
                 $"{deletedStyles} styles removed\n" +
@@ -228,12 +218,24 @@ namespace XLTrim.UI
 
             ShowPanel(panelDone);
             txtSubtitle.Text = "File cleaned successfully.";
+            btnClose.IsEnabled = true;
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
 
         private void ShowPanel(UIElement panel)
         {
+            // Stop the spin animation when leaving the scanning panel.
+            if (panel != panelScanning)
+            {
+                try
+                {
+                    var sb = (System.Windows.Media.Animation.Storyboard)Resources["SpinAnimation"];
+                    sb.Stop(spinRing);
+                }
+                catch { }
+            }
+
             panelScanning.Visibility = Visibility.Collapsed;
             panelResults.Visibility  = Visibility.Collapsed;
             panelCleaning.Visibility = Visibility.Collapsed;

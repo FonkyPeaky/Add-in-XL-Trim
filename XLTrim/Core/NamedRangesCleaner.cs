@@ -36,6 +36,12 @@ namespace XLTrim.Core
                     {
                         isInvalid = true;
                     }
+                    else if (refersTo.Contains("[") && refersTo.Contains("]"))
+                    {
+                        // External workbook reference (e.g. ='[OtherBook.xlsx]Sheet1'!$A$1).
+                        // The target workbook may simply be closed — do not delete.
+                        isInvalid = false;
+                    }
                     else
                     {
                         // Fast path: if the formula references a sheet by name, check the
@@ -48,7 +54,7 @@ namespace XLTrim.Core
                         }
                         else
                         {
-                            // Fallback for formulas without a sheet qualifier (e.g. constants,
+                            // Fallback for formulas without a sheet qualifier (constants,
                             // structured references). Only call RefersToRange as a last resort.
                             try { var _ = name.RefersToRange; }
                             catch { isInvalid = true; }
@@ -72,14 +78,18 @@ namespace XLTrim.Core
         /// <summary>Rend visibles toutes les plages nommées cachées.</summary>
         public static int UnhideAll(Excel.Workbook workbook)
         {
-            int count = 0;
+            // Two-pass: collect first, then modify — avoids mutating the COM
+            // Names collection while iterating it (can cause skipped entries).
+            var toUnhide = new List<Excel.Name>();
             foreach (Excel.Name name in workbook.Names)
             {
-                try
-                {
-                    if (!name.Visible) { name.Visible = true; count++; }
-                }
-                catch { }
+                try { if (!name.Visible) toUnhide.Add(name); } catch { }
+            }
+
+            int count = 0;
+            foreach (var name in toUnhide)
+            {
+                try { name.Visible = true; count++; } catch { }
             }
             return count;
         }
